@@ -12,6 +12,7 @@
 #include <poll.h>
 
 #define PORT 9034
+#define PORTS "9034"
 
 
 //===============================================
@@ -33,15 +34,6 @@ struct sockaddr_in makeSocket(void){
 //     receive information from server
 //===============================================
 int receive(int sockfd){
-
-	return 0;
-}
-
-//===============================================
-//               receive
-//     send stuff to server
-//===============================================
-int sendInfo(int sockfd){
 	char buffer[1024];
 
 	int numbytes = recv(sockfd, buffer, sizeof buffer; 0);
@@ -54,12 +46,24 @@ int sendInfo(int sockfd){
 }
 
 
+
+//===============================================
+//               receive
+//     send stuff to server
+//===============================================
+int sendInfo(int sockfd){
+
+	return 0;
+}
+
+
 //===============================================
 //                  main
 //===============================================
 int main(int argc, char **argv){
 
     int LISTENING = 1;
+	struct addrinfo hints, *res;
 
     //ESTABLISH SOCKET
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -68,8 +72,17 @@ int main(int argc, char **argv){
       exit(0);
     }
 
-    struct sockaddr_in server_addr = makeSocket();	//fill in socket ids
-    connect(sockfd, server_addr, sizeof server_addr); //handles connection and bind
+	memset(&hints, 0 ,sizeof hints);
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+	getaddrinfo(argv[1], PORTS, &hints, &res);
+
+	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+	connect(sockfd, res->ai_addr, res->ai_addrlen);
+    /*struct sockaddr_in server_addr = makeSocket();	//fill in socket ids
+    connect(sockfd, server_addr, sizeof server_addr); //handles connection and bind*/
 
     struct pollfd pfds[1];
     while (LISTENING == 1){
