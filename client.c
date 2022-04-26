@@ -42,6 +42,13 @@ int receive(int sockfd){
 //     send stuff to server
 //===============================================
 int sendInfo(int sockfd){
+	char buffer[1024];
+
+	int numbytes = recv(sockfd, buffer, sizeof buffer; 0);
+	if (numbytes == -1){
+		perror("recv");
+		exit(1);
+	}
 
 	return 0;
 }
