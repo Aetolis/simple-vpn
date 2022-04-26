@@ -36,11 +36,15 @@ struct sockaddr_in makeSocket(void){
 int receive(int sockfd){
 	char buffer[1024];
 
-	int numbytes = recv(sockfd, buffer, sizeof buffer; 0);
+	int numbytes = recv(sockfd, buffer, sizeof buffer, 0);
 	if (numbytes == -1){
 		perror("recv");
 		exit(1);
 	}
+
+  char flag;
+	short len = 0;
+	char url[len];
 
 	return 0;
 }
