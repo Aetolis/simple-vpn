@@ -11,7 +11,7 @@
 #include <netdb.h>
 #include <poll.h>
 
-#define PORT "9034"
+#define PORT 9034
 
 
 //===============================================
@@ -21,7 +21,7 @@
 struct sockaddr_in makeSocket(void){
 	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(SERVERPORT);
+	server_addr.sin_port = htons(PORT);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 	memset(server_addr.sin_zero, 0, sizeof server_addr.sin_zero);
 
