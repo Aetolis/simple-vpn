@@ -28,6 +28,24 @@ struct sockaddr_in makeSocket(void){
 	return server_addr;
 }
 
+//===============================================
+//               receive
+//     receive information from server
+//===============================================
+int receive(int sockfd){
+
+	return 0;
+}
+
+//===============================================
+//               receive
+//     send stuff to server
+//===============================================
+int sendInfo(int sockfd){
+
+	return 0;
+}
+
 
 //===============================================
 //                  main
@@ -50,18 +68,24 @@ int main(int argc, char **argv){
     while (LISTENING == 1){
         char buffer[1024];
         struct sockaddr_storage sender_addr;      // sender's address (may be IPv6)
-		socklen_t addr1_len = sizeof sender_addr;  // length of this address
+				socklen_t addr1_len = sizeof sender_addr;  // length of this address
 
         pfds[0].fd = sockfd;
-		pfds[0].events = POLLIN;
+				pfds[0].events = POLLIN;
+
+				pfds[1].fd = 0; //cin
+				pfds[1].events = POLLIN;
 
         int num_events = poll(pfds, 2, -1);
         if (num_events != 0){
-            int pollin_happened = pfds[0].revents & POLLIN;
-            if (pollin_happened){
-                char buffer[1024];
-                int numbytes = recv(sockfd, buffer, sizeof buffer, 0);
+            int pollin_happened1 = pfds[0].revents & POLLIN;
+						int pollin_happened2 = pfds[1].revents & POLLIN;
+            if (pollin_happened1){
+                receive(sockfd);
             }
+						else if (pollin_happened2){
+								sendInfo(sockfd);
+						}
         }
     }
 
