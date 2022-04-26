@@ -11,8 +11,8 @@
 #include <netdb.h>
 #include <poll.h>
 
-#define PORT 9034
-#define PORTS "9034"
+#define PORTS 9034
+#define PORT "9034"
 
 
 //===============================================
@@ -22,7 +22,7 @@
 struct sockaddr_in makeSocket(void){
 	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(PORT);
+	server_addr.sin_port = htons(PORTS);
 	server_addr.sin_addr.s_addr = INADDR_ANY;
 	memset(server_addr.sin_zero, 0, sizeof server_addr.sin_zero);
 
@@ -54,6 +54,7 @@ int sendInfo(int sockfd){
 int main(int argc, char **argv){
 
     int LISTENING = 1;
+    int bytes_sent;
 	struct addrinfo hints, *res;
 	
     //ESTABLISH SOCKET
@@ -67,15 +68,20 @@ int main(int argc, char **argv){
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	
-	getaddrinfo(argv[1], PORTS, &hints, &res);
+	getaddrinfo(argv[1], PORT, &hints, &res);
 	
 	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	
 	connect(sockfd, res->ai_addr, res->ai_addrlen);
-    /*struct sockaddr_in server_addr = makeSocket();	//fill in socket ids
-    connect(sockfd, server_addr, sizeof server_addr); //handles connection and bind*/
+	 printf("%s \n %s \n", argv[1], argv[2]);
+	
+	char *msg = argv[2];
 
-    struct pollfd pfds[1];
+    bytes_sent = send(sockfd, msg, sizeof(msg), 0);
+    
+
+
+    /*struct pollfd pfds[1];
     while (LISTENING == 1){
         char buffer[1024];
         struct sockaddr_storage sender_addr;      // sender's address (may be IPv6)
@@ -99,7 +105,7 @@ int main(int argc, char **argv){
 						}
         }
     }
-
+	*/
     close(sockfd);
 
     return 0;
