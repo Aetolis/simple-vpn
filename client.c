@@ -34,9 +34,22 @@ struct sockaddr_in makeSocket(void){
 //     receive information from server
 //===============================================
 int receive(int sockfd){
-	
+	char buffer[1024];
+
+	int numbytes = recv(sockfd, buffer, sizeof buffer, 0);
+	if (numbytes == -1){
+		perror("recv");
+		exit(1);
+	}
+
+  char flag;
+	short len = 0;
+	char url[len];
+
 	return 0;
 }
+
+
 
 //===============================================
 //               receive
@@ -56,7 +69,7 @@ int main(int argc, char **argv){
     int LISTENING = 1;
     int bytes_sent;
 	struct addrinfo hints, *res;
-	
+
     //ESTABLISH SOCKET
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1) {
@@ -67,11 +80,17 @@ int main(int argc, char **argv){
 	memset(&hints, 0 ,sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
+<<<<<<< HEAD
 	
 	getaddrinfo(argv[1], PORT, &hints, &res);
 	
+=======
+
+	getaddrinfo(argv[1], PORTS, &hints, &res);
+
+>>>>>>> 0b062f2c62b45e911f89f279d61cf8213d2fca40
 	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-	
+
 	connect(sockfd, res->ai_addr, res->ai_addrlen);
 	 printf("%s \n %s \n", argv[1], argv[2]);
 	
