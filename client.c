@@ -91,7 +91,7 @@ int main(int argc, char **argv){
 		connect(sockfd, res->ai_addr, res->ai_addrlen);
 	 	printf("%s \n %s \n", argv[1], argv[2]);
 
-		char *msg = argv[2];
+		//char *msg = argv[2];
 
     	int bytes_sent = send(sockfd, msg, sizeof(msg), 0);
     	
