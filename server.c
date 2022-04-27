@@ -156,9 +156,7 @@ int main(void)
                     } else {
                         add_to_pfds(&pfds, newfd, &fd_count, &fd_size);
 
-                        printf("pollserver: new connection from %s on "
-                            "socket %d\n",
-                            inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
+                        printf("pollserver: new connection from %s on socket %d\n", inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
                     }
                 } else {
                     // If not the listener, we're just a regular client
@@ -180,14 +178,16 @@ int main(void)
                         del_from_pfds(pfds, i, &fd_count);
 
                     } else {
-                        // We got some good data from a client
+                        // data received from client
+
+
 
                         for(int j = 0; j < fd_count; j++) {
                             // Send to everyone!
                             int dest_fd = pfds[j].fd;
 
                             // Except the listener and ourselves
-                            if (dest_fd != listener && dest_fd != sender_fd) {
+                            if (dest_fd != listener) {
                                 if (send(dest_fd, buf, nbytes, 0) == -1) {
                                     perror("send");
                                 }
