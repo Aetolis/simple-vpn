@@ -70,32 +70,24 @@ int sendInfo(int sockfd){
 //===============================================
 int main(int argc, char **argv){
 
-    int LISTENING = 1;
-    int bytes_sent;
-		struct addrinfo hints, *res;
+	struct addrinfo hints, *res;
+ 	int sockfd, LISTENING = 1;
 
-    //ESTABLISH SOCKET
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1) {
-      perror("client: socket failed");
-      exit(0);
-    }
+	memset(&hints, 0 ,sizeof hints);
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
 
-		memset(&hints, 0 ,sizeof hints);
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
+	getaddrinfo(argv[1], PORT, &hints, &res);
 
-		getaddrinfo(argv[1], PORT, &hints, &res);
-		//getaddrinfo(argv[1], PORTS, &hints, &res);
+	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
-		sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	connect(sockfd, res->ai_addr, res->ai_addrlen);
 
-		connect(sockfd, res->ai_addr, res->ai_addrlen);
-	 	printf("%s \n %s \n", argv[1], argv[2]);
+	char *msg = argv[2];
 
-		char *msg = argv[2];
+    int bytes_sent = send(sockfd, msg, sizeof(msg), 0);
 
-    bytes_sent = send(sockfd, msg, sizeof(msg), 0);
+    printf("%d \n", bytes_sent);
 
 
     struct pollfd pfds[2];
