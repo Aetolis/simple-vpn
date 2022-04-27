@@ -36,15 +36,19 @@ struct sockaddr_in makeSocket(void){
 int receive(int sockfd){
 	char buffer[1024];
 
-	int numbytes = recv(sockfd, buffer, sizeof buffer, 0);
+	int numbytes = recv(sockfd, buffer, sizeof(buffer), 0);
 	if (numbytes == -1){
 		perror("recv");
 		exit(1);
 	}
 
-  char flag;
-	short len = 0;
-	char url[len];
+  FILE *file = fopen("received", "w");
+	int results = fputs(buffer, file);
+	if (results == EOF){
+		perror("write to file");
+		exit(1);
+	}
+	fclose(file);
 
 	return 0;
 }
@@ -68,7 +72,7 @@ int main(int argc, char **argv){
 
     int LISTENING = 1;
     int bytes_sent;
-	struct addrinfo hints, *res;
+		struct addrinfo hints, *res;
 
     //ESTABLISH SOCKET
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -77,19 +81,19 @@ int main(int argc, char **argv){
       exit(0);
     }
 
-	memset(&hints, 0 ,sizeof hints);
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
+		memset(&hints, 0 ,sizeof hints);
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_socktype = SOCK_STREAM;
 
-	//getaddrinfo(argv[1], PORT, &hints, &res);
-	getaddrinfo(argv[1], PORTS, &hints, &res);
+		getaddrinfo(argv[1], PORT, &hints, &res);
+		//getaddrinfo(argv[1], PORTS, &hints, &res);
 
-	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+		sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
-	connect(sockfd, res->ai_addr, res->ai_addrlen);
-	 printf("%s \n %s \n", argv[1], argv[2]);
+		connect(sockfd, res->ai_addr, res->ai_addrlen);
+	 	printf("%s \n %s \n", argv[1], argv[2]);
 
-	char *msg = argv[2];
+		char *msg = argv[2];
 
     bytes_sent = send(sockfd, msg, sizeof(msg), 0);
 
