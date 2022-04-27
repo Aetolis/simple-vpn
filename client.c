@@ -80,24 +80,19 @@ int main(int argc, char **argv){
 	memset(&hints, 0 ,sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-<<<<<<< HEAD
-	
-	getaddrinfo(argv[1], PORT, &hints, &res);
-	
-=======
 
+	//getaddrinfo(argv[1], PORT, &hints, &res);
 	getaddrinfo(argv[1], PORTS, &hints, &res);
 
->>>>>>> 0b062f2c62b45e911f89f279d61cf8213d2fca40
 	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
 	connect(sockfd, res->ai_addr, res->ai_addrlen);
 	 printf("%s \n %s \n", argv[1], argv[2]);
-	
+
 	char *msg = argv[2];
 
     bytes_sent = send(sockfd, msg, sizeof(msg), 0);
-    
+
 
 
     /*struct pollfd pfds[1];
