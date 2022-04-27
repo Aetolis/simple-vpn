@@ -1,10 +1,10 @@
 all: client server
 
 client:
-	gcc -o client client.c -Wall -Werror
+	gcc -o client.out client.c -Wall -Werror
 
 server:
-	gcc -o server server.c -Wall -Werror
+	gcc -o server.out server.c -Wall -Werror
 
 clean:
-	rm -f client server
+	rm -f client server *.out
