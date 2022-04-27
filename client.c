@@ -98,10 +98,9 @@ int main(int argc, char **argv){
     bytes_sent = send(sockfd, msg, sizeof(msg), 0);
 
 
-
-    /*struct pollfd pfds[1];
+    struct pollfd pfds[2];
     while (LISTENING == 1){
-        char buffer[1024];
+        //char buffer[1024];
         struct sockaddr_storage sender_addr;      // sender's address (may be IPv6)
 				socklen_t addr1_len = sizeof sender_addr;  // length of this address
 
@@ -123,7 +122,7 @@ int main(int argc, char **argv){
 						}
         }
     }
-	*/
+
     close(sockfd);
 
     return 0;
