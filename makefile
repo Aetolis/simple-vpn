@@ -5,3 +5,6 @@ client:
 
 server:
 	gcc -o server server.c -Wall -Werror
+
+clean:
+	rm -f client server
