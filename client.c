@@ -11,23 +11,8 @@
 #include <netdb.h>
 #include <poll.h>
 
-#define PORTS 9034
 #define PORT "9034"
-
-
-//===============================================
-//               makeSocket
-//     create socket for receiving info
-//===============================================
-struct sockaddr_in makeSocket(void){
-	struct sockaddr_in server_addr;
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(PORTS);
-	server_addr.sin_addr.s_addr = INADDR_ANY;
-	memset(server_addr.sin_zero, 0, sizeof server_addr.sin_zero);
-
-	return server_addr;
-}
+#define MAXDATASIZE 1024
 
 //===============================================
 //               receive
@@ -36,19 +21,15 @@ struct sockaddr_in makeSocket(void){
 int receive(int sockfd){
 	char buffer[1024];
 
-	int numbytes = recv(sockfd, buffer, sizeof(buffer), 0);
+	int numbytes = recv(sockfd, buffer, sizeof buffer, 0);
 	if (numbytes == -1){
 		perror("recv");
 		exit(1);
 	}
 
-  FILE *file = fopen("received", "w");
-	int results = fputs(buffer, file);
-	if (results == EOF){
-		perror("write to file");
-		exit(1);
-	}
-	fclose(file);
+  	// char flag;
+	// short len = 0;
+	// char url[len];
 
 	return 0;
 }
@@ -65,36 +46,90 @@ int sendInfo(int sockfd){
 }
 
 
+void *get_in_addr(struct sockaddr *sa){
+	if (sa->sa_family == AF_INET){
+		return &(((struct sockaddr_in*)sa)->sin_addr);
+	}
+
+	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+
 //===============================================
 //                  main
 //===============================================
-int main(int argc, char **argv){
+int main(int argc, char *argv[]){
+    int LISTENING = 1;
+    // int bytes_sent;
 
-	struct addrinfo hints, *res;
- 	int sockfd, LISTENING = 1;
+	int sockfd, numbytes, rv;
+	struct addrinfo hints, *servinfo, *p;
+	char s[INET6_ADDRSTRLEN];
+	char buf[MAXDATASIZE];
 
-	memset(&hints, 0 ,sizeof hints);
+	if (argc != 3){
+		fprintf(stderr, "usage: client hostname address\n");
+		exit(1);
+	}
+
+	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	getaddrinfo(argv[1], PORT, &hints, &res);
+	if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0){
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+		return 1;
+	}
 
-	sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	// loop through all the results and connect to the first we can
+	for (p = servinfo; p != NULL; p = p->ai_next){
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+			perror("client: socket");
+			continue;
+		}
 
-	connect(sockfd, res->ai_addr, res->ai_addrlen);
+		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1){
+			close(sockfd);
+			perror("client: connect");
+			continue;
+		}
 
+		break;
+	}
+
+	if (p == NULL){
+		fprintf(stderr, "client: failed to connect\n");
+		return 2;
+	}
+
+	// Get the address of the server
+	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
+	printf("client: connecting to %s\n", s);
+
+	freeaddrinfo(servinfo);
+
+	// Send the message to the server
+	printf("%s \n %s \n", argv[1], argv[2]);
+	
 	char *msg = argv[2];
 
-    int bytes_sent = send(sockfd, msg, sizeof(msg), 0);
+	numbytes = send(sockfd, msg, sizeof(msg), 0);
 
-    printf("%d \n", bytes_sent);
+	// receive message from server
+	if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1){
+		perror("recv");
+		exit(1);
+	}
 
+	buf[numbytes] = '\0';
 
+	printf("client: received '%s'\n", buf);
+    
     struct pollfd pfds[2];
     while (LISTENING == 1){
         //char buffer[1024];
-        struct sockaddr_storage sender_addr;      // sender's address (may be IPv6)
-				socklen_t addr1_len = sizeof sender_addr;  // length of this address
+        // struct sockaddr_storage sender_addr;      // sender's address (may be IPv6)
+		// socklen_t addr1_len = sizeof sender_addr;  // length of this address
 
         pfds[0].fd = sockfd;
 				pfds[0].events = POLLIN;
