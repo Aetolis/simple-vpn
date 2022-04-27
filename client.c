@@ -70,9 +70,7 @@ int sendInfo(int sockfd){
 //===============================================
 int main(int argc, char **argv){
 
-    int LISTENING = 1;
-    int bytes_sent;
-		struct addrinfo hints, *res;
+	struct addrinfo hints, *res;
 
     //ESTABLISH SOCKET
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -95,7 +93,9 @@ int main(int argc, char **argv){
 
 		char *msg = argv[2];
 
-    bytes_sent = send(sockfd, msg, sizeof(msg), 0);
+    	int bytes_sent = send(sockfd, msg, sizeof(msg), 0);
+    	
+    	printf("%d \n", bytes_sent);
 
 
 
