@@ -37,11 +37,19 @@ int receive(int sockfd){
 
 
 //===============================================
-//               receive
+//               sendInfo
 //     send stuff to server
 //===============================================
-int sendInfo(int sockfd){
+int sendInfo(int sockfd, char *url){
 
+	char message[MAXDATASIZE];
+	unsigned short length;
+	
+	memset(message, 0, MAXDATASIZE);
+	
+	message[0] = 0;
+	
+	
 	return 0;
 }
 
@@ -66,6 +74,14 @@ int main(int argc, char *argv[]){
 	struct addrinfo hints, *servinfo, *p;
 	char s[INET6_ADDRSTRLEN];
 	char buf[MAXDATASIZE];
+	
+	int i = 0;
+	char msg[1024];
+	while(argv[2][i] != 0){
+		msg[i] = argv[2][i];
+		i++;
+	}
+
 
 	if (argc != 3){
 		fprintf(stderr, "usage: client hostname address\n");
@@ -107,11 +123,10 @@ int main(int argc, char *argv[]){
 	printf("client: connecting to %s\n", s);
 
 	freeaddrinfo(servinfo);
-
-	// Send the message to the server
-	printf("%s \n %s \n", argv[1], argv[2]);
 	
-	char *msg = argv[2];
+	/*// Send the message to the server
+	printf("%s \n %s \n", argv[1], argv[2]);
+
 
 	numbytes = send(sockfd, msg, sizeof(msg), 0);
 
@@ -123,7 +138,9 @@ int main(int argc, char *argv[]){
 
 	buf[numbytes] = '\0';
 
-	printf("client: received '%s'\n", buf);
+	printf("client: received '%s'\n", buf);*/
+	
+	sendInfo(sockfd, msg);
     
     struct pollfd pfds[2];
     while (LISTENING == 1){
@@ -132,21 +149,21 @@ int main(int argc, char *argv[]){
 		// socklen_t addr1_len = sizeof sender_addr;  // length of this address
 
         pfds[0].fd = sockfd;
-				pfds[0].events = POLLIN;
+		pfds[0].events = POLLIN;
 
-				pfds[1].fd = 0; //cin
-				pfds[1].events = POLLIN;
+		pfds[1].fd = 0; //cin
+		pfds[1].events = POLLIN;
 
         int num_events = poll(pfds, 2, -1);
         if (num_events != 0){
             int pollin_happened1 = pfds[0].revents & POLLIN;
-						int pollin_happened2 = pfds[1].revents & POLLIN;
+			int pollin_happened2 = pfds[1].revents & POLLIN;
             if (pollin_happened1){
                 receive(sockfd);
             }
-						else if (pollin_happened2){
-								sendInfo(sockfd);
-						}
+			else if (pollin_happened2){
+				sendInfo(sockfd, msg);
+			}
         }
     }
 
