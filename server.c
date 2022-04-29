@@ -10,7 +10,8 @@
 #include <netdb.h>
 #include <poll.h>
 
-#define PORT "9034"   // Port we're listening on
+#define TCP_PORT "9034"   // Port we're listening on
+#define HTTP_PORT "80"
 #define MAXDATASIZE 1024
 
 // Get sockaddr, IPv4 or IPv6:
@@ -37,7 +38,7 @@ int get_listener_socket(void)
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
+    if ((rv = getaddrinfo(NULL, TCP_PORT, &hints, &ai)) != 0) {
         fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
         exit(1);
     }
@@ -100,19 +101,18 @@ void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
 }
 
 // Http request handler
-int http_request(char *url)
+int http_request(int sender_fd, char *url)
 {
     int sockfd, numbytes, rv;
     struct addrinfo hints, *servinfo, *p;
-    char s[INET6_ADDRSTRLEN];
 
     memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-    if ((rv = getaddrinfo(url, PORT, &hints, &servinfo)) != 0){
+    if ((rv = getaddrinfo(url, HTTP_PORT, &hints, &servinfo)) != 0){
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-		return 1;
+		return -1;
 	}
 
     // loop through all the results and connect to the first we can
@@ -133,31 +133,38 @@ int http_request(char *url)
 
     if (p == NULL){
 		fprintf(stderr, "client: failed to connect\n");
-		return 2;
+		return -1;
 	}
 
-	// Get the address of the server
-	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
-	printf("client: connecting to %s\n", s);
+    freeaddrinfo(servinfo);
     
     char *request;
     if (asprintf(&request, "GET / HTTP/1.1\r\nHost: %s\r\n\r\n", url) == -1) {
         perror("asprintf");
-        exit(1);
+        return -1;
     }
-    send(sockfd, request, 27 + strlen(url), 0);
+    printf("Making HTTP request to %s\n", url);
+
+    if (send(sockfd, request, 27 + strlen(url), 0) == -1) {
+        perror("send");
+        return -1;
+    }
     free(request);
 
     // read HTTP response
     char response[MAXDATASIZE];
-    memset(response, 0, MAXDATASIZE);
-    numbytes = recv(sockfd, response, MAXDATASIZE-1, 0);
-    if (numbytes == -1){
+    if ((numbytes = recv(sockfd, response, MAXDATASIZE-1, 0)) == -1) {
         perror("recv");
-        exit(1);
+        return -1;
     }
     response[numbytes] = '\0';
     printf("%s\n", response);
+
+    // send to client
+    if (send(sender_fd, response, numbytes, 0) == -1) {
+        perror("send");
+        return -1;
+    }
 
     close(sockfd);
 
@@ -246,16 +253,22 @@ int main(void)
 
                     } else {    // data received from client
                         //get flag
+                        printf("flag: %d\n", buf[0]);
 
                         uint16_t data_len;
                         memcpy(&data_len, buf + 1, sizeof(uint16_t));
                         data_len = ntohs(data_len);
+                        printf("data_len: %d\n", data_len);
 
                         char url[data_len];
                         memcpy(url, buf + 1 + sizeof(uint16_t), data_len);
+                        url[data_len] = '\0';
+                        printf("url: %s\n", url);
 
                         // HTTP request to url
-                        http_request(url);
+                        if (http_request(sender_fd, url) == -1) {
+                            printf("HTTP request failed\n");
+                        }
 
 
                         for(int j = 0; j < fd_count; j++) {
