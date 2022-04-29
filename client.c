@@ -40,8 +40,7 @@ int receive(int sockfd){
 //               sendInfo
 //     send stuff to server
 //===============================================
-int sendInfo(int sockfd, char *url){
-
+int send_url(int sockfd, char *url){
 	char message[MAXDATASIZE];	
 	memset(message, 0, MAXDATASIZE);
 
@@ -49,18 +48,16 @@ int sendInfo(int sockfd, char *url){
 	message[0] = 0x01;
 
 	// set url length
-	printf("%ld \n", strlen(url));
 	uint16_t length = htons(strlen(url));
 	memcpy(message + 1, &length, sizeof(uint16_t));
 
 	// set url
 	memcpy(message + 1 + sizeof(uint16_t), url, strlen(url));
 
-	// printf("%d \n", length);
-	// receive message from server
+	// send message to server
 	if ((send(sockfd, message, 5 + strlen(url), 0)) == -1){
 		perror("send");
-		exit(1);
+		return -1;
 	}
 	
 	return 0;
@@ -86,14 +83,6 @@ int main(int argc, char *argv[]){
 	struct addrinfo hints, *servinfo, *p;
 	char s[INET6_ADDRSTRLEN];
 	char buf[MAXDATASIZE];
-	
-	//construct initial message
-	/*int i = 0;
-	char msg[MAXDATASIZE];
-	while(argv[2][i] != 0){
-		msg[i] = argv[2][i];
-		i++;
-	}*/
 
 	if (argc != 2){
 		fprintf(stderr, "usage: client.out hostname\n");
@@ -162,13 +151,14 @@ int main(int argc, char *argv[]){
                 exit(1);
             }
             buf[strlen(buf) - 1] = '\0'; // remove newline
-            printf("%ld \n", strlen(buf));
-			sendInfo(sockfd, buf);
-            // if ((numbytes = send(sockfd, buf, strlen(buf) - 1, 0)) == -1)
-            // {
-            //     perror("[Client] send");
-            //     exit(1);
-            // }
+			// print strlen(buf)
+			printf("%ld \n", strlen(buf));
+
+			// send url to server
+			if (send_url(sockfd, buf) == -1){
+				exit(1);
+			}
+            
         }
 
         // if recvfrom ready
@@ -181,7 +171,8 @@ int main(int argc, char *argv[]){
             }
             // buffer[numbytes] = '\0';
 
-            // printf("%s: %s\n", other_username, buffer);
+			// print buf
+            printf("%s\n", buf);
         }
     }
 
