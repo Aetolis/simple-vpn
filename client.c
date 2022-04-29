@@ -42,30 +42,23 @@ int receive(int sockfd){
 //===============================================
 int sendInfo(int sockfd, char *url){
 
-	char message[MAXDATASIZE];
-	unsigned short length = 0;
-	
+	char message[MAXDATASIZE];	
 	memset(message, 0, MAXDATASIZE);
-	
-	int i = 0;
-	while(url[i] != 0){
-		length++;
-		i++;
-	}
-	
-	message[0] = 0;
-	message[1] = (htons(length) >> 8) & 0xff;
-	message[2] = htons(length) & 0xff;
-	
-	i = 0;
-	while(url[i] != 0){
-		message[3 + i] = url[i];
-	}
 
-	printf("%d \n", length);
+	// set message flag
+	message[0] = 0x01;
+
+	// set url length
+	uint16_t length = htons(strlen(url));
+	memcpy(message, &length, sizeof(uint16_t));
+
+	// set url
+	memcpy(message + 1 + sizeof(uint16_t), url, strlen(url));
+
+	// printf("%d \n", length);
 	// receive message from server
-	if ((send(sockfd, url, sizeof(url), 0)) == -1){
-		perror("recv");
+	if ((send(sockfd, message, 5 + strlen(url), 0)) == -1){
+		perror("send");
 		exit(1);
 	}
 	
@@ -86,7 +79,6 @@ void *get_in_addr(struct sockaddr *sa){
 //                  main
 //===============================================
 int main(int argc, char *argv[]){
-    int LISTENING = 1;
     // int bytes_sent;
 
 	int sockfd, numbytes, rv;
@@ -102,8 +94,8 @@ int main(int argc, char *argv[]){
 		i++;
 	}
 
-	if (argc != 3){
-		fprintf(stderr, "usage: client hostname address\n");
+	if (argc != 2){
+		fprintf(stderr, "usage: client.out hostname\n");
 		exit(1);
 	}
 
@@ -143,44 +135,55 @@ int main(int argc, char *argv[]){
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
 	printf("client: connecting to %s\n", s);
 
+	// setup poll
+    struct pollfd pfds[2];
+	pfds[0].fd = 0;
+	pfds[0].events = POLLIN;
+	pfds[1].fd = sockfd;
+	pfds[1].events = POLLIN;
+
 	freeaddrinfo(servinfo);
 
-    struct pollfd pfds[2];
-    while (LISTENING == 1){
-        //char buffer[1024];
-        // struct sockaddr_storage sender_addr;      // sender's address (may be IPv6)
-		// socklen_t addr1_len = sizeof sender_addr;  // length of this address
+	int poll_count;
 
-        pfds[0].fd = sockfd;
-		pfds[0].events = POLLIN;
+	for(;;)
+    {
+        if ((poll_count = poll(pfds, 2, -1)) == -1)
+        {
+            perror("[Client] poll");
+            exit(1);
+        }
 
-		pfds[1].fd = 0; //cin
-		pfds[1].events = POLLIN;
-
-        int num_events = poll(pfds, 2, -1);
-        if (num_events != 0){
-            int pollin_happened1 = pfds[0].revents & POLLIN;
-			int pollin_happened2 = pfds[1].revents & POLLIN;
-            if (pollin_happened1){
-                receive(sockfd);
+        // if stdin ready
+        if (pfds[0].revents & POLLIN)
+        {
+            if (fgets(buf, MAXDATASIZE, stdin) == NULL)
+            {
+                perror("[Client] fgets");
+                exit(1);
             }
-			else if (pollin_happened2){
-				sendInfo(sockfd, msg);
-			}
-						else if (pollin_happened2){
-								//sendInfo(sockfd);
-								char message[MAXDATASIZE];
+            // buf[strlen(buf) - 1] = '\0'; // remove newline
+			sendInfo(sockfd, buf);
 
-								fgets(message, MAXDATASIZE, stdin);
-								int i = 0;
-								while(argv[2][i] != 0){
-									message[i] = argv[2][i];
-									i++;
-								}
-								sendInfo(sockfd, message);
+            // if ((numbytes = send(sockfd, buf, strlen(buf) - 1, 0)) == -1)
+            // {
+            //     perror("[Client] send");
+            //     exit(1);
+            // }
+        }
 
-						}
-        	}
+        // if recvfrom ready
+        if (pfds[1].revents & POLLIN)
+        {
+            if ((numbytes = recv(sockfd, buf, MAXDATASIZE, 0)) == -1)
+            {
+                perror("[Client] recvfrom");
+                exit(1);
+            }
+            // buffer[numbytes] = '\0';
+
+            // printf("%s: %s\n", other_username, buffer);
+        }
     }
 
     close(sockfd);
