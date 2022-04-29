@@ -49,8 +49,9 @@ int sendInfo(int sockfd, char *url){
 	message[0] = 0x01;
 
 	// set url length
+	printf("%ld \n", strlen(url));
 	uint16_t length = htons(strlen(url));
-	memcpy(message, &length, sizeof(uint16_t));
+	memcpy(message + 1, &length, sizeof(uint16_t));
 
 	// set url
 	memcpy(message + 1 + sizeof(uint16_t), url, strlen(url));
@@ -87,12 +88,12 @@ int main(int argc, char *argv[]){
 	char buf[MAXDATASIZE];
 	
 	//construct initial message
-	int i = 0;
+	/*int i = 0;
 	char msg[MAXDATASIZE];
 	while(argv[2][i] != 0){
 		msg[i] = argv[2][i];
 		i++;
-	}
+	}*/
 
 	if (argc != 2){
 		fprintf(stderr, "usage: client.out hostname\n");
@@ -128,8 +129,6 @@ int main(int argc, char *argv[]){
 		fprintf(stderr, "client: failed to connect\n");
 		return 2;
 	}
-	
-	sendInfo(sockfd, msg);
 
 	// Get the address of the server
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
@@ -162,9 +161,9 @@ int main(int argc, char *argv[]){
                 perror("[Client] fgets");
                 exit(1);
             }
-            // buf[strlen(buf) - 1] = '\0'; // remove newline
+            buf[strlen(buf) - 1] = '\0'; // remove newline
+            printf("%ld \n", strlen(buf));
 			sendInfo(sockfd, buf);
-
             // if ((numbytes = send(sockfd, buf, strlen(buf) - 1, 0)) == -1)
             // {
             //     perror("[Client] send");
