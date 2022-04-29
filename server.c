@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include <poll.h>
 
 #define PORT "9034"   // Port we're listening on
+#define MAXDATASIZE 1024
 
 // Get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -97,6 +99,71 @@ void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
     (*fd_count)--;
 }
 
+// Http request handler
+int http_request(char *url)
+{
+    int sockfd, numbytes, rv;
+    struct addrinfo hints, *servinfo, *p;
+    char s[INET6_ADDRSTRLEN];
+
+    memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+    if ((rv = getaddrinfo(url, PORT, &hints, &servinfo)) != 0){
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+		return 1;
+	}
+
+    // loop through all the results and connect to the first we can
+	for (p = servinfo; p != NULL; p = p->ai_next){
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+			perror("client: socket");
+			continue;
+		}
+
+		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1){
+			close(sockfd);
+			perror("client: connect");
+			continue;
+		}
+
+		break;
+	}
+
+    if (p == NULL){
+		fprintf(stderr, "client: failed to connect\n");
+		return 2;
+	}
+
+	// Get the address of the server
+	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
+	printf("client: connecting to %s\n", s);
+    
+    char *request;
+    if (asprintf(&request, "GET / HTTP/1.1\r\nHost: %s\r\n\r\n", url) == -1) {
+        perror("asprintf");
+        exit(1);
+    }
+    send(sockfd, request, 27 + strlen(url), 0);
+    free(request);
+
+    // read HTTP response
+    char response[MAXDATASIZE];
+    memset(response, 0, MAXDATASIZE);
+    numbytes = recv(sockfd, response, MAXDATASIZE-1, 0);
+    if (numbytes == -1){
+        perror("recv");
+        exit(1);
+    }
+    response[numbytes] = '\0';
+    printf("%s\n", response);
+
+    close(sockfd);
+
+    return 0;
+}
+
 // Main
 int main(void)
 {
@@ -177,9 +244,18 @@ int main(void)
 
                         del_from_pfds(pfds, i, &fd_count);
 
-                    } else {
-                        // data received from client
+                    } else {    // data received from client
+                        //get flag
 
+                        uint16_t data_len;
+                        memcpy(&data_len, buf + 1, sizeof(uint16_t));
+                        data_len = ntohs(data_len);
+
+                        char url[data_len];
+                        memcpy(url, buf + 1 + sizeof(uint16_t), data_len);
+
+                        // HTTP request to url
+                        http_request(url);
 
 
                         for(int j = 0; j < fd_count; j++) {
