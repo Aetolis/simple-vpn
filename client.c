@@ -146,9 +146,9 @@ int main(int argc, char *argv[]){
             }
 						else if (pollin_happened2){
 								//sendInfo(sockfd);
-								char message[MAXBUFLEN];
+								char message[MAXDATASIZE];
 
-								fgets(message, MAXBUFLEN, stdin);
+								fgets(message, MAXDATASIZE, stdin);
 								int size = strlen(message);
 								message[size-1] = '\0';
 
