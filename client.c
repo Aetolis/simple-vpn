@@ -43,12 +43,31 @@ int receive(int sockfd){
 int sendInfo(int sockfd, char *url){
 
 	char message[MAXDATASIZE];
-	unsigned short length;
+	unsigned short length = 0;
 	
 	memset(message, 0, MAXDATASIZE);
 	
-	message[0] = 0;
+	int i = 0;
+	while(url[i] != 0){
+		length++;
+		i++;
+	}
 	
+	message[0] = 0;
+	message[1] = (htons(length) >> 8) & 0xff;
+	message[2] = htons(length) & 0xff;
+	
+	i = 0;
+	while(url[i] != 0){
+		message[3 + i] = url[i];
+	}
+
+	printf("%d \n", length);
+	// receive message from server
+	if ((send(sockfd, url, sizeof(url), 0)) == -1){
+		perror("recv");
+		exit(1);
+	}
 	
 	return 0;
 }
@@ -75,13 +94,13 @@ int main(int argc, char *argv[]){
 	char s[INET6_ADDRSTRLEN];
 	char buf[MAXDATASIZE];
 	
+	//construct initial message
 	int i = 0;
-	char msg[1024];
+	char msg[MAXDATASIZE];
 	while(argv[2][i] != 0){
 		msg[i] = argv[2][i];
 		i++;
 	}
-
 
 	if (argc != 3){
 		fprintf(stderr, "usage: client hostname address\n");
@@ -117,31 +136,15 @@ int main(int argc, char *argv[]){
 		fprintf(stderr, "client: failed to connect\n");
 		return 2;
 	}
+	
+	sendInfo(sockfd, msg);
 
 	// Get the address of the server
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
 	printf("client: connecting to %s\n", s);
 
 	freeaddrinfo(servinfo);
-	
-	/*// Send the message to the server
-	printf("%s \n %s \n", argv[1], argv[2]);
 
-
-	numbytes = send(sockfd, msg, sizeof(msg), 0);
-
-	// receive message from server
-	if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1){
-		perror("recv");
-		exit(1);
-	}
-
-	buf[numbytes] = '\0';
-
-	printf("client: received '%s'\n", buf);*/
-	
-	sendInfo(sockfd, msg);
-    
     struct pollfd pfds[2];
     while (LISTENING == 1){
         //char buffer[1024];
@@ -164,7 +167,20 @@ int main(int argc, char *argv[]){
 			else if (pollin_happened2){
 				sendInfo(sockfd, msg);
 			}
-        }
+						else if (pollin_happened2){
+								//sendInfo(sockfd);
+								char message[MAXDATASIZE];
+
+								fgets(message, MAXDATASIZE, stdin);
+								int i = 0;
+								while(argv[2][i] != 0){
+									message[i] = argv[2][i];
+									i++;
+								}
+								sendInfo(sockfd, message);
+
+						}
+        	}
     }
 
     close(sockfd);
