@@ -110,7 +110,7 @@ int main(int argc, char *argv[]){
 
 	// Send the message to the server
 	printf("%s \n %s \n", argv[1], argv[2]);
-	
+
 	char *msg = argv[2];
 
 	numbytes = send(sockfd, msg, sizeof(msg), 0);
@@ -124,7 +124,7 @@ int main(int argc, char *argv[]){
 	buf[numbytes] = '\0';
 
 	printf("client: received '%s'\n", buf);
-    
+
     struct pollfd pfds[2];
     while (LISTENING == 1){
         //char buffer[1024];
@@ -145,7 +145,13 @@ int main(int argc, char *argv[]){
                 receive(sockfd);
             }
 						else if (pollin_happened2){
-								sendInfo(sockfd);
+								//sendInfo(sockfd);
+								char message[MAXBUFLEN];
+
+								fgets(message, MAXBUFLEN, stdin);
+								int size = strlen(message);
+								message[size-1] = '\0';
+
 						}
         }
     }
