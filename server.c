@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <poll.h>
+#include <libs/csprng.h>
+#include <libs/ecdh.h>
 
 #define TCP_PORT "9034"   // Port we're listening on
 #define HTTP_PORT "80"
@@ -98,6 +100,30 @@ void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
     pfds[i] = pfds[*fd_count-1];
 
     (*fd_count)--;
+}
+
+// Add new client secret to the list
+void add_to_secs(uint8_t *cl_secs[], uint8_t *newsec, int *sec_count, int *sec_size)
+{
+    // If we don't have room, add more space in the secs array
+    if (*sec_count == *sec_size) {
+        *sec_size *= 2; // Double it
+
+        *cl_secs = realloc(*cl_secs, sizeof(**cl_secs) * (*sec_size));
+    }
+
+    (*cl_secs)[*sec_count] = *newsec;
+
+    (*sec_count)++;
+}
+
+// Remove client secret from the list
+void del_from_secs(uint8_t cl_secs[], int i, int *sec_count)
+{
+    // Copy the one from the end over this one
+    cl_secs[i] = cl_secs[*sec_count-1];
+
+    (*sec_count)--;
 }
 
 // Http request handler
@@ -204,6 +230,31 @@ int main(void)
 
     fd_count = 1; // For the listener
 
+    // Start off with room for 5 client secrets
+    int sec_count = 0;
+    int sec_size = 5;
+    uint8_t *cl_secs = malloc(sizeof(*cl_secs) * sec_size);
+
+    // Initialize CSPRNG
+    CSPRNG rng = csprng_create();
+    if (!rng) {
+        fprintf(stderr, "error initializing CSPRNG\n");
+        return 1;
+    }
+
+    // Initialize the server's keys
+    static uint8_t serv_pub[ECC_PUB_KEY_SIZE];
+    static uint8_t serv_prv[ECC_PRV_KEY_SIZE];
+
+    // Generate server's private key
+    csprng_get(rng, &serv_prv, ECC_PRV_KEY_SIZE);
+
+    // Generate server's public key
+    if (ecdh_generate_keys(serv_pub, serv_prv) != 1) {
+        fprintf(stderr, "error generating keys\n");
+        return 1;
+    }
+
     // Main loop
     for(;;) {
         int poll_count = poll(pfds, fd_count, -1);
@@ -230,6 +281,36 @@ int main(void)
                     } else {
                         add_to_pfds(&pfds, newfd, &fd_count, &fd_size);
 
+                        // Send server public key to client
+                        if (send(newfd, serv_pub, ECC_PUB_KEY_SIZE, 0) == -1) {
+                            perror("send");
+                            return 1;
+                        }
+
+                        printf("Server's public key: %s\n", serv_pub);
+
+                        // Receive client public key from client
+                        uint8_t cl_pub[ECC_PUB_KEY_SIZE];
+                        if (recv(newfd, cl_pub, ECC_PUB_KEY_SIZE, 0) == -1) {
+                            perror("recv");
+                            return 1;
+                        }
+
+                        // print client's public key
+                        printf("Client's public key: %s\n", cl_pub);
+
+                        // Generate shared secret
+                        static uint8_t shared_secret[ECC_PUB_KEY_SIZE];
+                        if (ecdh_shared_secret(serv_prv, cl_pub, shared_secret) != 1) {
+                            fprintf(stderr, "error generating shared secret\n");
+                            return 1;
+                        }
+
+                        printf("shared secret: %s\n", shared_secret);
+
+                        // Add client secret to list
+                        add_to_secs(&cl_secs, shared_secret, &sec_count, &sec_size);
+
                         printf("pollserver: new connection from %s on socket %d\n", inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
                     }
                 } else {
@@ -250,6 +331,7 @@ int main(void)
                         close(pfds[i].fd); // Bye!
 
                         del_from_pfds(pfds, i, &fd_count);
+                        del_from_secs(cl_secs, i, &sec_count);
 
                     } else {    // data received from client
                         //get flag
@@ -287,6 +369,7 @@ int main(void)
             } // END got ready-to-read from poll()
         } // END looping through file descriptors
     } // END for(;;)--and you thought it would never end!
-    
+
+    rng = csprng_destroy(rng);
     return 0;
 }

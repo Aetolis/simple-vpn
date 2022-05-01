@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <poll.h>
+#include <libs/csprng.h>
+#include <libs/ecdh.h>
 
 #define PORT "9034"
 #define MAXDATASIZE 1024
@@ -132,6 +134,53 @@ int main(int argc, char *argv[]){
 
 	freeaddrinfo(servinfo);
 
+	// Initialize CSPRNG
+    CSPRNG rng = csprng_create();
+    if (!rng) {
+        fprintf(stderr, "error initializing CSPRNG\n");
+        return 1;
+    }
+
+	// Initialize the client's keys
+    static uint8_t cl_pub[ECC_PUB_KEY_SIZE];
+    static uint8_t cl_prv[ECC_PRV_KEY_SIZE];
+
+	// Generate client's private key
+	csprng_get(rng, &cl_prv, ECC_PRV_KEY_SIZE);
+
+	// Generate client's public key
+	if (ecdh_generate_keys(cl_pub, cl_prv) != 1) {
+		fprintf(stderr, "error generating client's public key\n");
+		return 1;
+	}
+
+	// Receiving the server's public key
+	uint8_t srv_pub[ECC_PUB_KEY_SIZE];
+	if (recv(sockfd, srv_pub, ECC_PUB_KEY_SIZE, 0) == -1){
+		perror("recv");
+		return 1;
+	}
+
+	printf("Server's public key: %s\n", srv_pub);
+
+	// Send client's public key to server
+	if (send(sockfd, cl_pub, ECC_PUB_KEY_SIZE, 0) == -1){
+		perror("send");
+		return 1;
+	}
+
+	printf("Client's public key: %s\n", cl_pub);
+
+	// Generate shared secret
+	static uint8_t shared_secret[ECC_PUB_KEY_SIZE];
+	if (ecdh_shared_secret(cl_prv, srv_pub, shared_secret) != 1) {
+		fprintf(stderr, "error generating shared secret\n");
+		return 1;
+	}
+
+	// print shared secret
+	printf("shared secret: %s\n", shared_secret);
+
 	int poll_count;
 
 	for(;;)
@@ -176,6 +225,7 @@ int main(int argc, char *argv[]){
         }
     }
 
+	rng = csprng_destroy(rng);
     close(sockfd);
 
     return 0;
