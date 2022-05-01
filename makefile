@@ -1,16 +1,19 @@
 all: client server
 
-ecdh.o: ecdh.c
-	gcc -c ecdh.c -I.
+ecdh.o: libs/ecdh.c
+	gcc -c libs/ecdh.c -I.
 
-csprng.o: csprng.c
-	gcc -c csprng.c -I.
+csprng.o: libs/csprng.c
+	gcc -c libs/csprng.c -I.
 
-client: ecdh.o csprng.o
-	gcc -o client.out client.c ecdh.o csprng.o -Wall -Werror -I.
+sha256.o: libs/sha256.c
+	gcc -c libs/sha256.c -I.
 
-server: ecdh.o csprng.o
-	gcc -o server.out server.c ecdh.o csprng.o -Wall -Werror -I.
+client: ecdh.o csprng.o sha256.o
+	gcc -o client.out client.c ecdh.o csprng.o sha256.o -Wall -Werror -I.
+
+server: ecdh.o csprng.o sha256.o
+	gcc -o server.out server.c ecdh.o csprng.o sha256.o -Wall -Werror -I.
 
 clean:
 	rm -f client server *.out *.o
