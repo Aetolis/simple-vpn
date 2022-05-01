@@ -17,6 +17,12 @@
 #define HTTP_PORT "80"
 #define MAXDATASIZE 1024
 
+struct cl_info{
+    uint8_t cl_pub[ECC_PUB_KEY_SIZE];
+    uint8_t shr_key[ECC_PUB_KEY_SIZE];
+    BYTE aes_key[SHA256_BLOCK_SIZE];
+};
+
 // Get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -104,22 +110,24 @@ void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
 }
 
 // Add new client secret to the list
-void add_to_secs(uint8_t *cl_secs[], uint8_t *newsec, int *sec_count, int *sec_size)
+void add_to_secs(struct cl_info *cl_secs[], uint8_t *cl_pub, uint8_t *shr_key, BYTE *aes_key, int *sec_count, int *sec_size)
 {
-    // If we don't have room, add more space in the secs array
+    // If we don't have room, add more space in the cl_secs array
     if (*sec_count == *sec_size) {
         *sec_size *= 2; // Double it
 
         *cl_secs = realloc(*cl_secs, sizeof(**cl_secs) * (*sec_size));
     }
+    
+    memcpy((*cl_secs)[*sec_count].cl_pub, cl_pub, ECC_PUB_KEY_SIZE);
+    memcpy((*cl_secs)[*sec_count].shr_key, shr_key, ECC_PUB_KEY_SIZE);
+    memcpy((*cl_secs)[*sec_count].aes_key, aes_key, SHA256_BLOCK_SIZE);
 
-    (*cl_secs)[*sec_count] = *newsec;
-
-    (*sec_count)++;
+    (*sec_count)++;   
 }
 
 // Remove client secret from the list
-void del_from_secs(uint8_t cl_secs[], int i, int *sec_count)
+void del_from_secs(struct cl_info cl_secs[], int i, int *sec_count)
 {
     // Copy the one from the end over this one
     cl_secs[i] = cl_secs[*sec_count-1];
@@ -234,7 +242,7 @@ int main(void)
     // Start off with room for 5 client secrets
     int sec_count = 0;
     int sec_size = 5;
-    uint8_t *cl_secs = malloc(sizeof(*cl_secs) * sec_size);
+    struct cl_info *cl_secs = malloc(sizeof(*cl_secs) * sec_size);
 
     // Initialize CSPRNG
     CSPRNG rng = csprng_create();
@@ -256,7 +264,7 @@ int main(void)
         return 1;
     }
 
-    // Initialize SHA256
+    // Initialize SHA256 context
     SHA256_CTX ctx;
 
     // Main loop
@@ -300,28 +308,30 @@ int main(void)
                             return 1;
                         }
 
-                        // print client's public key
-                        printf("Client's public key: %s\n", cl_pub);
-
                         // Generate shared secret
-                        static uint8_t shared_secret[ECC_PUB_KEY_SIZE];
-                        if (ecdh_shared_secret(serv_prv, cl_pub, shared_secret) != 1) {
+                        static uint8_t shr_key[ECC_PUB_KEY_SIZE];
+                        if (ecdh_shared_secret(serv_prv, cl_pub, shr_key) != 1) {
                             fprintf(stderr, "error generating shared secret\n");
                             return 1;
                         }
 
-                        printf("shared secret: %s\n", shared_secret);
-
                         // Generate AES key
                         BYTE aes_key[SHA256_BLOCK_SIZE];
                         sha256_init(&ctx);
-                        sha256_update(&ctx, shared_secret, ECC_PUB_KEY_SIZE);
+                        sha256_update(&ctx, shr_key, ECC_PUB_KEY_SIZE);
                         sha256_final(&ctx, aes_key);
 
-                        printf("AES key: %s\n", aes_key); 
-
                         // Add client secret to list
-                        add_to_secs(&cl_secs, shared_secret, &sec_count, &sec_size);
+                        add_to_secs(&cl_secs, cl_pub, shr_key, aes_key, &sec_count, &sec_size);
+
+                        // print client's public key
+                        printf("Client public key: %s\n", cl_secs[sec_count-1].cl_pub);
+                        printf("Shared secret: %s\n", cl_secs[sec_count-1].shr_key);
+                        printf("AES key: %s\n", cl_secs[sec_count-1].aes_key);
+                        // if (memcmp(aes_key, cl_secs[sec_count-1].aes_key, SHA256_BLOCK_SIZE) != 0) {
+                        //     fprintf(stderr, "error generating AES key\n");
+                        //     return 1;
+                        // }
 
                         printf("pollserver: new connection from %s on socket %d\n", inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
                     }
