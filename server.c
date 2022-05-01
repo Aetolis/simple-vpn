@@ -11,6 +11,7 @@
 #include <poll.h>
 #include <libs/csprng.h>
 #include <libs/ecdh.h>
+#include <libs/sha256.h>
 
 #define TCP_PORT "9034"   // Port we're listening on
 #define HTTP_PORT "80"
@@ -255,6 +256,9 @@ int main(void)
         return 1;
     }
 
+    // Initialize SHA256
+    SHA256_CTX ctx;
+
     // Main loop
     for(;;) {
         int poll_count = poll(pfds, fd_count, -1);
@@ -307,6 +311,14 @@ int main(void)
                         }
 
                         printf("shared secret: %s\n", shared_secret);
+
+                        // Generate AES key
+                        BYTE aes_key[SHA256_BLOCK_SIZE];
+                        sha256_init(&ctx);
+                        sha256_update(&ctx, shared_secret, ECC_PUB_KEY_SIZE);
+                        sha256_final(&ctx, aes_key);
+
+                        printf("AES key: %s\n", aes_key); 
 
                         // Add client secret to list
                         add_to_secs(&cl_secs, shared_secret, &sec_count, &sec_size);

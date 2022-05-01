@@ -12,6 +12,7 @@
 #include <poll.h>
 #include <libs/csprng.h>
 #include <libs/ecdh.h>
+#include <libs/sha256.h>
 
 #define PORT "9034"
 #define MAXDATASIZE 1024
@@ -35,8 +36,6 @@ int receive(int sockfd){
 
 	return 0;
 }
-
-
 
 //===============================================
 //               sendInfo
@@ -180,6 +179,15 @@ int main(int argc, char *argv[]){
 
 	// print shared secret
 	printf("shared secret: %s\n", shared_secret);
+
+	// Generate AES key
+	SHA256_CTX ctx;
+	BYTE aes_key[SHA256_BLOCK_SIZE];
+	sha256_init(&ctx);
+	sha256_update(&ctx, shared_secret, ECC_PUB_KEY_SIZE);
+	sha256_final(&ctx, aes_key);
+
+	printf("AES key: %s\n", aes_key); 
 
 	int poll_count;
 
