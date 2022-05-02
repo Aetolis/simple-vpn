@@ -1,41 +1,6 @@
 // client.c
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <poll.h>
-#include <libs/csprng.h>
-#include <libs/ecdh.h>
-#include <libs/sha256.h>
-
-#define PORT "9034"
-#define MAXDATASIZE 1024
-
-//===============================================
-//               receive
-//     receive information from server
-//===============================================
-int receive(int sockfd){
-	char buffer[1024];
-
-	int numbytes = recv(sockfd, buffer, sizeof buffer, 0);
-	if (numbytes == -1){
-		perror("recv");
-		exit(1);
-	}
-
-  	// char flag;
-	// short len = 0;
-	// char url[len];
-
-	return 0;
-}
+#include "header.h"
 
 //===============================================
 //               sendInfo
@@ -64,13 +29,25 @@ int send_url(int sockfd, char *url){
 	return 0;
 }
 
-
-void *get_in_addr(struct sockaddr *sa){
-	if (sa->sa_family == AF_INET){
-		return &(((struct sockaddr_in*)sa)->sin_addr);
+int pkcs7_unpad(char *buf, int *buf_len){
+	if ((*buf_len) % BLOCKSIZE != 0){
+		fprintf(stderr, "pkcs7_unpad: invalid block size\n");
+		return -1;
 	}
 
-	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+	char pad_num = buf[(*buf_len) - 1];
+
+	if (pad_num >= BLOCKSIZE){
+		return 0;
+	}
+
+	for (int i = (*buf_len) - pad_num; i < (*buf_len); i++){
+		if (buf[i] != pad_num){
+			return 0;
+		}
+	}
+	(*buf_len) -= pad_num;
+	return 0;
 }
 
 
@@ -78,8 +55,6 @@ void *get_in_addr(struct sockaddr *sa){
 //                  main
 //===============================================
 int main(int argc, char *argv[]){
-    // int bytes_sent;
-
 	int sockfd, numbytes, rv;
 	struct addrinfo hints, *servinfo, *p;
 	char s[INET6_ADDRSTRLEN];
@@ -94,7 +69,7 @@ int main(int argc, char *argv[]){
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0){
+	if ((rv = getaddrinfo(argv[1], TCP_PORT, &hints, &servinfo)) != 0){
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
@@ -160,7 +135,8 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
-	printf("Server's public key: %s\n", srv_pub);
+	printf("srv_pub: ");
+	print_hex_uint8(srv_pub, ECC_PUB_KEY_SIZE);
 
 	// Send client's public key to server
 	if (send(sockfd, cl_pub, ECC_PUB_KEY_SIZE, 0) == -1){
@@ -168,7 +144,8 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
-	printf("Client's public key: %s\n", cl_pub);
+	printf("cl_pub: ");
+	print_hex_uint8(cl_pub, ECC_PUB_KEY_SIZE);
 
 	// Generate shared secret
 	static uint8_t shared_secret[ECC_PUB_KEY_SIZE];
@@ -178,7 +155,8 @@ int main(int argc, char *argv[]){
 	}
 
 	// print shared secret
-	printf("shared secret: %s\n", shared_secret);
+	printf("shared secret: ");
+	print_hex_uint8(shared_secret, ECC_PUB_KEY_SIZE);
 
 	// Generate AES key
 	SHA256_CTX ctx;
@@ -187,7 +165,15 @@ int main(int argc, char *argv[]){
 	sha256_update(&ctx, shared_secret, ECC_PUB_KEY_SIZE);
 	sha256_final(&ctx, aes_key);
 
-	printf("AES key: %s\n", aes_key); 
+	printf("AES key: ");
+	print_hex_byte(aes_key, SHA256_BLOCK_SIZE); 
+
+	// Open log file
+	FILE *log_file = fopen("main.html", "wb");
+	if (log_file == NULL){
+		fprintf(stderr, "error opening log file\n");
+		return 1;
+	}
 
 	int poll_count;
 
@@ -208,8 +194,6 @@ int main(int argc, char *argv[]){
                 exit(1);
             }
             buf[strlen(buf) - 1] = '\0'; // remove newline
-			// print strlen(buf)
-			printf("%ld \n", strlen(buf));
 
 			// send url to server
 			if (send_url(sockfd, buf) == -1){
@@ -227,14 +211,36 @@ int main(int argc, char *argv[]){
                 exit(1);
             }
             // buffer[numbytes] = '\0';
+			
+			// Server closed connection
+			if (numbytes == 0){
+				printf("[Client] Server closed connection\n");
+				break;
+			}
 
-			// print buf
-            printf("%s\n", buf);
-        }
+			// Unencrypt the message
+			struct AES_ctx aes_ctx;
+			AES_init_ctx(&aes_ctx, aes_key);
+			AES_CBC_decrypt_buffer(&aes_ctx, (uint8_t*)buf, numbytes);
+
+			// unpad the message
+			if (pkcs7_unpad(buf, &numbytes) == -1) {
+				fprintf(stderr, "error unpadding message\n");
+				exit(1);
+			}
+
+			// Print padded message
+			printf("message: ");
+			print_hex(buf, numbytes);
+
+			// Save to file
+			fwrite(buf, sizeof(char), numbytes, log_file);
+		}
     }
 
 	rng = csprng_destroy(rng);
     close(sockfd);
+	fclose(log_file);
 
     return 0;
 }

@@ -1,37 +1,12 @@
-#define _GNU_SOURCE
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <poll.h>
-#include <libs/csprng.h>
-#include <libs/ecdh.h>
-#include <libs/sha256.h>
+// server.c
 
-#define TCP_PORT "9034"   // Port we're listening on
-#define HTTP_PORT "80"
-#define MAXDATASIZE 1024
+#include "header.h"
 
 struct cl_info{
     uint8_t cl_pub[ECC_PUB_KEY_SIZE];
     uint8_t shr_key[ECC_PUB_KEY_SIZE];
     BYTE aes_key[SHA256_BLOCK_SIZE];
 };
-
-// Get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
 
 // Return a listening socket
 int get_listener_socket(void)
@@ -136,9 +111,9 @@ void del_from_secs(struct cl_info cl_secs[], int i, int *sec_count)
 }
 
 // Http request handler
-int http_request(int sender_fd, char *url)
+int http_request(char *response, int *response_len, int sender_fd, char *url)
 {
-    int sockfd, numbytes, rv;
+    int sockfd, rv;
     struct addrinfo hints, *servinfo, *p;
 
     memset(&hints, 0, sizeof(hints));
@@ -178,7 +153,7 @@ int http_request(int sender_fd, char *url)
         perror("asprintf");
         return -1;
     }
-    printf("Making HTTP request to %s\n", url);
+    printf("[socket %d] Making HTTP request to %s\n", sender_fd, url);
 
     if (send(sockfd, request, 27 + strlen(url), 0) == -1) {
         perror("send");
@@ -187,23 +162,25 @@ int http_request(int sender_fd, char *url)
     free(request);
 
     // read HTTP response
-    char response[MAXDATASIZE];
-    if ((numbytes = recv(sockfd, response, MAXDATASIZE-1, 0)) == -1) {
+    if (((*response_len) = recv(sockfd, response, MAXDATASIZE-1, 0)) == -1) {
         perror("recv");
         return -1;
     }
-    response[numbytes] = '\0';
-    printf("%s\n", response);
-
-    // send to client
-    if (send(sender_fd, response, numbytes, 0) == -1) {
-        perror("send");
-        return -1;
-    }
+    response[(*response_len)] = '\0';
 
     close(sockfd);
 
     return 0;
+}
+
+// PKCS#7 padding
+void pkcs7_pad(char *buf, int *data_len)
+{
+    uint8_t pad_len = BLOCKSIZE - ((*data_len) % BLOCKSIZE);
+    for (int i = 0; i < pad_len; i++) {
+        buf[(*data_len) + i] = pad_len;
+    }
+    (*data_len) += pad_len;
 }
 
 // Main
@@ -248,7 +225,7 @@ int main(void)
     CSPRNG rng = csprng_create();
     if (!rng) {
         fprintf(stderr, "error initializing CSPRNG\n");
-        return 1;
+        exit(1);
     }
 
     // Initialize the server's keys
@@ -261,11 +238,13 @@ int main(void)
     // Generate server's public key
     if (ecdh_generate_keys(serv_pub, serv_prv) != 1) {
         fprintf(stderr, "error generating keys\n");
-        return 1;
+        exit(1);
     }
+    printf("serv_pub: ");
+    print_hex_uint8(serv_pub, ECC_PUB_KEY_SIZE);
 
     // Initialize SHA256 context
-    SHA256_CTX ctx;
+    SHA256_CTX sha256_ctx;
 
     // Main loop
     for(;;) {
@@ -299,7 +278,7 @@ int main(void)
                             return 1;
                         }
 
-                        printf("Server's public key: %s\n", serv_pub);
+                        
 
                         // Receive client public key from client
                         uint8_t cl_pub[ECC_PUB_KEY_SIZE];
@@ -317,17 +296,24 @@ int main(void)
 
                         // Generate AES key
                         BYTE aes_key[SHA256_BLOCK_SIZE];
-                        sha256_init(&ctx);
-                        sha256_update(&ctx, shr_key, ECC_PUB_KEY_SIZE);
-                        sha256_final(&ctx, aes_key);
+                        sha256_init(&sha256_ctx);
+                        sha256_update(&sha256_ctx, shr_key, ECC_PUB_KEY_SIZE);
+                        sha256_final(&sha256_ctx, aes_key);
 
                         // Add client secret to list
                         add_to_secs(&cl_secs, cl_pub, shr_key, aes_key, &sec_count, &sec_size);
 
-                        // print client's public key
-                        printf("Client public key: %s\n", cl_secs[sec_count-1].cl_pub);
-                        printf("Shared secret: %s\n", cl_secs[sec_count-1].shr_key);
-                        printf("AES key: %s\n", cl_secs[sec_count-1].aes_key);
+                        
+                        printf("[socket %d] establishing ECDH...\n", newfd);
+                        printf("cl_pub: ");
+                        print_hex_uint8(cl_secs[sec_count-1].cl_pub, ECC_PUB_KEY_SIZE);
+
+                        printf("shr_key: ");
+                        print_hex_uint8(cl_secs[sec_count-1].shr_key, ECC_PUB_KEY_SIZE);
+
+                        printf("aes_key: ");
+                        print_hex_uint8(cl_secs[sec_count-1].aes_key, SHA256_BLOCK_SIZE);
+
                         // if (memcmp(aes_key, cl_secs[sec_count-1].aes_key, SHA256_BLOCK_SIZE) != 0) {
                         //     fprintf(stderr, "error generating AES key\n");
                         //     return 1;
@@ -356,36 +342,49 @@ int main(void)
                         del_from_secs(cl_secs, i, &sec_count);
 
                     } else {    // data received from client
-                        //get flag
-                        printf("flag: %d\n", buf[0]);
-
                         uint16_t data_len;
                         memcpy(&data_len, buf + 1, sizeof(uint16_t));
                         data_len = ntohs(data_len);
-                        printf("data_len: %d\n", data_len);
 
                         char url[data_len];
                         memcpy(url, buf + 1 + sizeof(uint16_t), data_len);
                         url[data_len] = '\0';
-                        printf("url: %s\n", url);
 
                         // HTTP request to url
-                        if (http_request(sender_fd, url) == -1) {
+                        char response[MAXDATASIZE];
+                        int response_len;
+                        if (http_request(response, &response_len, sender_fd, url) == -1) {
                             printf("HTTP request failed\n");
                         }
 
+                        // printf("%s\n", response);
+                        print_hex(response, response_len);
 
-                        for(int j = 0; j < fd_count; j++) {
-                            // Send to everyone!
-                            int dest_fd = pfds[j].fd;
+                        // Pad response using PKCS#7
+                        pkcs7_pad(response, &response_len);
 
-                            // Except the listener and ourselves
-                            if (dest_fd != listener) {
-                                if (send(dest_fd, buf, nbytes, 0) == -1) {
-                                    perror("send");
-                                }
-                            }
+                        // Encrypt response using AES
+                        struct AES_ctx aes_ctx;
+                        AES_init_ctx(&aes_ctx, cl_secs[sec_count-1].aes_key);
+                        AES_CBC_encrypt_buffer(&aes_ctx, (uint8_t*)response, response_len);
+
+                        // send to client
+                        if (send(sender_fd, response, response_len, 0) == -1) {
+                            perror("send");
+                            return -1;
                         }
+
+                        // for(int j = 0; j < fd_count; j++) {
+                        //     // Send to everyone!
+                        //     int dest_fd = pfds[j].fd;
+
+                        //     // Except the listener and ourselves
+                        //     if (dest_fd != listener) {
+                        //         if (send(dest_fd, buf, nbytes, 0) == -1) {
+                        //             perror("send");
+                        //         }
+                        //     }
+                        // }
                     }
                 } // END handle data from client
             } // END got ready-to-read from poll()
