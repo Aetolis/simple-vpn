@@ -9,11 +9,14 @@ csprng.o: libs/csprng.c
 sha256.o: libs/sha256.c
 	gcc -c libs/sha256.c -I.
 
-client: ecdh.o csprng.o sha256.o
-	gcc -o client.out client.c ecdh.o csprng.o sha256.o -Wall -Werror -I.
+aes.o: libs/aes.c
+	gcc -c libs/aes.c -I.
 
-server: ecdh.o csprng.o sha256.o
-	gcc -o server.out server.c ecdh.o csprng.o sha256.o -Wall -Werror -I.
+client: ecdh.o csprng.o sha256.o aes.o
+	gcc -o client.out client.c ecdh.o csprng.o sha256.o aes.o -Wall -Werror -I.
+
+server: ecdh.o csprng.o sha256.o aes.o
+	gcc -o server.out server.c ecdh.o csprng.o sha256.o aes.o -Wall -Werror -I.
 
 clean:
-	rm -f client server *.out *.o
+	rm -f client server *.out *.o *.html
