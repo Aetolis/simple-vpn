@@ -41,10 +41,11 @@ void print_hex_uint8(uint8_t *msg, int len)
     printf("\n");
 }
 
-void *get_in_addr(struct sockaddr *sa){
-	if (sa->sa_family == AF_INET){
-		return &(((struct sockaddr_in*)sa)->sin_addr);
-	}
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET){
+	return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
 
-	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
