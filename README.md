@@ -1,5 +1,5 @@
 # simple-vpn
-This repository contains a simple implementation of a client to server virtual private network or proxy service written in C. All connections are handled by TCP and are end to end encrypted using AES.
+This repository contains a simple implementation of a client to server virtual private network or proxy service written in C. All connections are handled by TCP and are end to end encrypted using AES. 
 
 # Makefile
 Use `make` or `make all` to compile the program and all its dependencies.
@@ -30,6 +30,9 @@ clean:
 ```
 
 The `make` command outputs the object files for each library in addition to two executable programs named `./client.out` and `./server.out`.
+
+# Testing
+To test the code, first start the server by using the following command: `./server.out`, which does not take any parameters. Next, to start the client run `./client.out <hostname>`, replacing `<hostname>` with the hostname of the server. Note that the server is able to handle multiple clients simultaneously so it is possible to have more than one client connected to the server at the same time. Finally, on the client side, input the hostname or IP of the HTTP webserver on the command line and press enter. The client should forward the request to the server and save the return message to disk. Both the client and server are verbose, printing out intermediary values for transparency.
 
 # Header.h
 In the shared header file, we include the nessecary library headers, define macros, and shared helper functions.
