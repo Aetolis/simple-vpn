@@ -19,4 +19,4 @@ server: ecdh.o csprng.o sha256.o aes.o
 	gcc -o server.out server.c ecdh.o csprng.o sha256.o aes.o -Wall -Werror -I.
 
 clean:
-	rm -f client server *.out *.o *.html
+	rm -f *.out *.o *.html
