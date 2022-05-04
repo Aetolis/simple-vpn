@@ -29,14 +29,19 @@ int send_url(int sockfd, char *url){
 	return 0;
 }
 
+//===============================================
+//               pkcs7_unpad
+//    unpads the buffer inputted into fucntion
+//===============================================
 int pkcs7_unpad(char *buf, int *buf_len){
+	// checks for error
 	if ((*buf_len) % BLOCKSIZE != 0){
 		fprintf(stderr, "pkcs7_unpad: invalid block size\n");
 		return -1;
 	}
 
 	char pad_num = buf[(*buf_len) - 1];
-
+	// check whether pad_num is bigger than BLOCKSIZE or not
 	if (pad_num >= BLOCKSIZE){
 		return 0;
 	}
@@ -76,11 +81,13 @@ int main(int argc, char *argv[]){
 
 	// loop through all the results and connect to the first we can
 	for (p = servinfo; p != NULL; p = p->ai_next){
+		// establishes socket
 		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
 			perror("client: socket");
 			continue;
 		}
 
+		// Establishes connection between client and server
 		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1){
 			close(sockfd);
 			perror("client: connect");
@@ -90,6 +97,7 @@ int main(int argc, char *argv[]){
 		break;
 	}
 
+	// checks for client connection error
 	if (p == NULL){
 		fprintf(stderr, "client: failed to connect\n");
 		return 2;
@@ -135,6 +143,7 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
+	// prints srv_pub
 	printf("srv_pub: ");
 	print_hex_uint8(srv_pub, ECC_PUB_KEY_SIZE);
 
@@ -144,6 +153,7 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
+	// prints cl_pub
 	printf("cl_pub: ");
 	print_hex_uint8(cl_pub, ECC_PUB_KEY_SIZE);
 
@@ -179,7 +189,8 @@ int main(int argc, char *argv[]){
 
 	for(;;)
     {
-        if ((poll_count = poll(pfds, 2, -1)) == -1)
+        // checks for poll error
+		if ((poll_count = poll(pfds, 2, -1)) == -1)
         {
             perror("[Client] poll");
             exit(1);
@@ -188,7 +199,8 @@ int main(int argc, char *argv[]){
         // if stdin ready
         if (pfds[0].revents & POLLIN)
         {
-            if (fgets(buf, MAXDATASIZE, stdin) == NULL)
+            // Grabs the input into the terminal
+			if (fgets(buf, MAXDATASIZE, stdin) == NULL)
             {
                 perror("[Client] fgets");
                 exit(1);
@@ -205,6 +217,7 @@ int main(int argc, char *argv[]){
         // if recvfrom ready
         if (pfds[1].revents & POLLIN)
         {
+			// receives data and checks for error
             if ((numbytes = recv(sockfd, buf, MAXDATASIZE, 0)) == -1)
             {
                 perror("[Client] recvfrom");
@@ -238,6 +251,7 @@ int main(int argc, char *argv[]){
 		}
     }
 
+	// Close socket and shutdown process
 	rng = csprng_destroy(rng);
     close(sockfd);
 	fclose(log_file);
