@@ -8,25 +8,25 @@ Use `make` or `make all` to compile the program and all its dependencies.
 all: client server
 
 ecdh.o: libs/ecdh.c
-	gcc -c libs/ecdh.c -I.
+    gcc -c libs/ecdh.c -I.
 
 csprng.o: libs/csprng.c
-	gcc -c libs/csprng.c -I.
+    gcc -c libs/csprng.c -I.
 
 sha256.o: libs/sha256.c
-	gcc -c libs/sha256.c -I.
+    gcc -c libs/sha256.c -I.
 
 aes.o: libs/aes.c
-	gcc -c libs/aes.c -I.
+    gcc -c libs/aes.c -I.
 
 client: ecdh.o csprng.o sha256.o aes.o
-	gcc -o client.out client.c ecdh.o csprng.o sha256.o aes.o -Wall -Werror -I.
+    gcc -o client.out client.c ecdh.o csprng.o sha256.o aes.o -Wall -Werror -I.
 
 server: ecdh.o csprng.o sha256.o aes.o
-	gcc -o server.out server.c ecdh.o csprng.o sha256.o aes.o -Wall -Werror -I.
+    gcc -o server.out server.c ecdh.o csprng.o sha256.o aes.o -Wall -Werror -I.
 
 clean:
-	rm -f *.out *.o *.html
+    rm -f *.out *.o *.html
 ```
 
 The `make` command outputs the object files for each library in addition to two executable programs named `./client.out` and `./server.out`.
@@ -49,12 +49,51 @@ void print_hex(const char *msg, int len)
 
 Additionally, we also define `get_in_addr()`, a helper function we use to setup our TCP connections.
 ```c
-void *get_in_addr(struct sockaddr *sa){
-	if (sa->sa_family == AF_INET){
-		return &(((struct sockaddr_in*)sa)->sin_addr);
-	}
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET){
+    return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
 
-	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+```
+
+Lastly, we define the helper functions `pkcs7_pad()` and `pkcs7_unpad()` which implements padding for our `char` buffers as specified by [PKCS#7](https://datatracker.ietf.org/doc/html/rfc2315).
+
+```c
+void pkcs7_pad(char *buf, int *data_len)
+{
+    uint8_t pad_len = AES_BLOCKLEN - ((*data_len) % AES_BLOCKLEN);
+    for (int i = 0; i < pad_len; i++) {
+        buf[(*data_len) + i] = pad_len;
+    }
+    (*data_len) += pad_len;
+}
+```
+
+```c
+int pkcs7_unpad(char *buf, int *buf_len)
+{
+    // checks for error
+    if ((*buf_len) % AES_BLOCKLEN != 0){
+        fprintf(stderr, "pkcs7_unpad: invalid block size\n");
+        return -1;
+    }
+
+    char pad_num = buf[(*buf_len) - 1];
+    // check whether pad_num is bigger than AES_BLOCKLEN or not
+    if (pad_num >= AES_BLOCKLEN){
+        return 0;
+    }
+
+    for (int i = (*buf_len) - pad_num; i < (*buf_len); i++){
+        if (buf[i] != pad_num){
+            return 0;
+        }
+    }
+    (*buf_len) -= pad_num;
+    return 0;
 }
 ```
 
