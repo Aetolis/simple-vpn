@@ -6,55 +6,41 @@
 //               sendInfo
 //     send stuff to server
 //===============================================
-int send_url(int sockfd, char *url){
-	char message[MAXDATASIZE];	
-	memset(message, 0, MAXDATASIZE);
+int send_url(int sockfd, char *url, BYTE *aes_key, BYTE *aes_iv){
+	char message[MAXPACKETSIZE];
 
 	// set message flag
 	message[0] = 0x01;
 
-	// set url length
-	uint16_t length = htons(strlen(url));
-	memcpy(message + 1, &length, sizeof(uint16_t));
+	// set url msg_len
+	uint16_t url_msg_len = htons(strlen(url));
+	memcpy(message + 1, &url_msg_len, sizeof(uint16_t));
 
 	// set url
 	memcpy(message + 1 + sizeof(uint16_t), url, strlen(url));
 
+	// pad message
+	int msg_len = 1 + sizeof(uint16_t) + strlen(url);
+	pkcs7_pad(message, &msg_len);
+
+	// encrypt message
+	struct AES_ctx aes_ctx;
+	AES_init_ctx_iv(&aes_ctx, aes_key, aes_iv);
+	AES_CBC_encrypt_buffer(&aes_ctx, (uint8_t*)message, msg_len);
+
+	// prepend IV to message
+	char packet[msg_len + AES_BLOCKLEN];
+	memcpy(packet, aes_iv, AES_BLOCKLEN);
+	memcpy(packet + AES_BLOCKLEN, message, msg_len);
+
 	// send message to server
-	if ((send(sockfd, message, 5 + strlen(url), 0)) == -1){
+	if ((send(sockfd, packet, msg_len + AES_BLOCKLEN, 0)) == -1){
 		perror("send");
 		return -1;
 	}
 	
 	return 0;
 }
-
-//===============================================
-//               pkcs7_unpad
-//    unpads the buffer inputted into fucntion
-//===============================================
-int pkcs7_unpad(char *buf, int *buf_len){
-	// checks for error
-	if ((*buf_len) % BLOCKSIZE != 0){
-		fprintf(stderr, "pkcs7_unpad: invalid block size\n");
-		return -1;
-	}
-
-	char pad_num = buf[(*buf_len) - 1];
-	// check whether pad_num is bigger than BLOCKSIZE or not
-	if (pad_num >= BLOCKSIZE){
-		return 0;
-	}
-
-	for (int i = (*buf_len) - pad_num; i < (*buf_len); i++){
-		if (buf[i] != pad_num){
-			return 0;
-		}
-	}
-	(*buf_len) -= pad_num;
-	return 0;
-}
-
 
 //===============================================
 //                  main
@@ -169,11 +155,11 @@ int main(int argc, char *argv[]){
 	print_hex_uint8(shared_secret, ECC_PUB_KEY_SIZE);
 
 	// Generate AES key
-	SHA256_CTX ctx;
+	SHA256_CTX sha256_ctx;
 	BYTE aes_key[SHA256_BLOCK_SIZE];
-	sha256_init(&ctx);
-	sha256_update(&ctx, shared_secret, ECC_PUB_KEY_SIZE);
-	sha256_final(&ctx, aes_key);
+	sha256_init(&sha256_ctx);
+	sha256_update(&sha256_ctx, shared_secret, ECC_PUB_KEY_SIZE);
+	sha256_final(&sha256_ctx, aes_key);
 
 	printf("AES key: ");
 	print_hex_byte(aes_key, SHA256_BLOCK_SIZE); 
@@ -207,8 +193,12 @@ int main(int argc, char *argv[]){
             }
             buf[strlen(buf) - 1] = '\0'; // remove newline
 
+			// generate IV
+			uint8_t iv[AES_BLOCKLEN];
+			csprng_get(rng, &iv, AES_BLOCKLEN);
+
 			// send url to server
-			if (send_url(sockfd, buf) == -1){
+			if (send_url(sockfd, buf, aes_key, iv) == -1){
 				exit(1);
 			}
             
@@ -231,23 +221,33 @@ int main(int argc, char *argv[]){
 				break;
 			}
 
-			// Unencrypt the message
+			// get IV from buf
+			uint8_t iv[AES_BLOCKLEN];
+			memcpy(iv, buf, AES_BLOCKLEN);
+
+			// get ciphertext from buf
+			char buftext[numbytes - AES_BLOCKLEN];
+			memcpy(buftext, buf + AES_BLOCKLEN, numbytes - AES_BLOCKLEN);
+			numbytes -= AES_BLOCKLEN;
+
+			// Decrypt the message
 			struct AES_ctx aes_ctx;
-			AES_init_ctx(&aes_ctx, aes_key);
-			AES_CBC_decrypt_buffer(&aes_ctx, (uint8_t*)buf, numbytes);
+			AES_init_ctx_iv(&aes_ctx, aes_key, iv);
+			AES_CBC_decrypt_buffer(&aes_ctx, (uint8_t*)buftext, numbytes);
 
 			// unpad the message
-			if (pkcs7_unpad(buf, &numbytes) == -1) {
+			if (pkcs7_unpad(buftext, &numbytes) == -1) {
 				fprintf(stderr, "error unpadding message\n");
 				exit(1);
 			}
 
 			// Print padded message
 			printf("message: ");
-			print_hex(buf, numbytes);
+			print_hex(buftext, numbytes);
 
 			// Save to file
-			fwrite(buf, sizeof(char), numbytes, log_file);
+			fwrite(buftext, sizeof(char), numbytes, log_file);
+			fflush(log_file);
 		}
     }
 

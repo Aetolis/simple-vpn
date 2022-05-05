@@ -173,16 +173,6 @@ int http_request(char *response, int *response_len, int sender_fd, char *url)
     return 0;
 }
 
-// PKCS#7 padding
-void pkcs7_pad(char *buf, int *data_len)
-{
-    uint8_t pad_len = BLOCKSIZE - ((*data_len) % BLOCKSIZE);
-    for (int i = 0; i < pad_len; i++) {
-        buf[(*data_len) + i] = pad_len;
-    }
-    (*data_len) += pad_len;
-}
-
 // Main
 int main(void)
 {
@@ -192,7 +182,7 @@ int main(void)
     struct sockaddr_storage remoteaddr; // Client address
     socklen_t addrlen;
 
-    char buf[256];    // Buffer for client data
+    char buf[MAXPACKETSIZE];    // Buffer for client data
 
     char remoteIP[INET6_ADDRSTRLEN];
 
@@ -263,7 +253,6 @@ int main(void)
 
                 if (pfds[i].fd == listener) {
                     // If listener is ready to read, handle new connection
-
                     addrlen = sizeof(remoteaddr);
                     newfd = accept(listener, (struct sockaddr *)&remoteaddr, &addrlen);
 
@@ -277,8 +266,6 @@ int main(void)
                             perror("send");
                             return 1;
                         }
-
-                        
 
                         // Receive client public key from client
                         uint8_t cl_pub[ECC_PUB_KEY_SIZE];
@@ -340,14 +327,42 @@ int main(void)
 
                         del_from_pfds(pfds, i, &fd_count);
                         del_from_secs(cl_secs, i, &sec_count);
-
                     } else {    // data received from client
+                        // get IV from buf
+                        uint8_t iv[AES_BLOCKLEN];
+                        memcpy(iv, buf, AES_BLOCKLEN);
+
+                        // get ciphertext from buf
+                        char buftext[nbytes - AES_BLOCKLEN];
+                        memcpy(buftext, buf + AES_BLOCKLEN, nbytes - AES_BLOCKLEN);
+                        nbytes -= AES_BLOCKLEN;
+
+                        // Decrypt message
+                        struct AES_ctx aes_ctx;
+                        AES_init_ctx_iv(&aes_ctx, cl_secs[i-1].aes_key, iv);
+                        AES_CBC_decrypt_buffer(&aes_ctx, (uint8_t*)buftext, nbytes);
+
+                        // Print message
+                        printf("decrypted message: ");
+                        print_hex(buftext, nbytes);
+
+                        // unpad message
+                        if (pkcs7_unpad(buftext, &nbytes) == -1) {
+                            fprintf(stderr, "error unpadding message\n");
+                            continue;
+                        }
+
+                        printf("unpadded message: ");
+                        print_hex(buftext, nbytes);
+                        printf("message: %s\n", buftext);
+                        printf("message len: %d\n", nbytes);
+
                         uint16_t data_len;
-                        memcpy(&data_len, buf + 1, sizeof(uint16_t));
+                        memcpy(&data_len, buftext + 1, sizeof(uint16_t));
                         data_len = ntohs(data_len);
 
                         char url[data_len];
-                        memcpy(url, buf + 1 + sizeof(uint16_t), data_len);
+                        memcpy(url, buftext + 1 + sizeof(uint16_t), data_len);
                         url[data_len] = '\0';
 
                         // HTTP request to url
@@ -355,6 +370,7 @@ int main(void)
                         int response_len;
                         if (http_request(response, &response_len, sender_fd, url) == -1) {
                             printf("HTTP request failed\n");
+                            continue;
                         }
 
                         // printf("%s\n", response);
@@ -363,13 +379,21 @@ int main(void)
                         // Pad response using PKCS#7
                         pkcs7_pad(response, &response_len);
 
+                        // get IV
+                        uint8_t iv2[AES_BLOCKLEN];
+                        csprng_get(rng, &iv2, AES_BLOCKLEN);
+
                         // Encrypt response using AES
-                        struct AES_ctx aes_ctx;
-                        AES_init_ctx(&aes_ctx, cl_secs[i-1].aes_key);
+                        AES_init_ctx_iv(&aes_ctx, cl_secs[i-1].aes_key, iv2);
                         AES_CBC_encrypt_buffer(&aes_ctx, (uint8_t*)response, response_len);
 
+                        // prepend IV to response
+                        char packet[response_len + AES_BLOCKLEN];
+                        memcpy(packet, iv2, AES_BLOCKLEN);
+                        memcpy(packet + AES_BLOCKLEN, response, response_len);
+
                         // send to client
-                        if (send(sender_fd, response, response_len, 0) == -1) {
+                        if (send(sender_fd, packet, response_len + AES_BLOCKLEN, 0) == -1) {
                             perror("send");
                             return -1;
                         }
