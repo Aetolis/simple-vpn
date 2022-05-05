@@ -44,7 +44,7 @@ void print_hex_uint8(uint8_t *msg, int len)
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET){
-	return &(((struct sockaddr_in*)sa)->sin_addr);
+    return &(((struct sockaddr_in*)sa)->sin_addr);
     }
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
@@ -67,24 +67,25 @@ void pkcs7_pad(char *buf, int *data_len)
 //               pkcs7_unpad
 //    unpads the buffer inputted into fucntion
 //===============================================
-int pkcs7_unpad(char *buf, int *buf_len){
-	// checks for error
-	if ((*buf_len) % AES_BLOCKLEN != 0){
-		fprintf(stderr, "pkcs7_unpad: invalid block size\n");
-		return -1;
-	}
+int pkcs7_unpad(char *buf, int *buf_len)
+{
+    // checks for error
+    if ((*buf_len) % AES_BLOCKLEN != 0){
+        fprintf(stderr, "pkcs7_unpad: invalid block size\n");
+        return -1;
+    }
 
-	char pad_num = buf[(*buf_len) - 1];
-	// check whether pad_num is bigger than AES_BLOCKLEN or not
-	if (pad_num >= AES_BLOCKLEN){
-		return 0;
-	}
+    char pad_num = buf[(*buf_len) - 1];
+    // check whether pad_num is bigger than AES_BLOCKLEN or not
+    if (pad_num >= AES_BLOCKLEN){
+        return 0;
+    }
 
-	for (int i = (*buf_len) - pad_num; i < (*buf_len); i++){
-		if (buf[i] != pad_num){
-			return 0;
-		}
-	}
-	(*buf_len) -= pad_num;
-	return 0;
+    for (int i = (*buf_len) - pad_num; i < (*buf_len); i++){
+        if (buf[i] != pad_num){
+            return 0;
+        }
+    }
+    (*buf_len) -= pad_num;
+    return 0;
 }
