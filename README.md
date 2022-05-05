@@ -98,6 +98,88 @@ int pkcs7_unpad(char *buf, int *buf_len)
 ```
 
 # Client.c
+The file `client.c` contains our implementation for the client system. We first define a helper function `send_url()` that sends a packet to the server containing the URL or hostname of the HTTP server that the client would like to connect to. The packet consists of a header and a URL field. The first byte of the header is the flag field. The flag field currently is by default always set to `0x01` as our implementation only supports one mode but this field is being included for possible expansion in the future. Next, the header contains the 2 byte length of the url field in network byte order. Lastly, we append the URL specified by the user. Before the packet is sent off to the server, we also prepend the IV value to the start of the packet. The IV value, a 16 bytes values that we generate using a CSPRNG, is required for us to be able to properly decrypt the message using AES.
+
+```c
+int send_url(int sockfd, char *url, BYTE *aes_key, BYTE *aes_iv){
+    char message[MAXPACKETSIZE];
+
+    // set message flag
+    message[0] = 0x01;
+
+    // set url msg_len
+    uint16_t url_msg_len = htons(strlen(url));
+    memcpy(message + 1, &url_msg_len, sizeof(uint16_t));
+
+    // set url
+    memcpy(message + 1 + sizeof(uint16_t), url, strlen(url));
+
+    // pad message
+    int msg_len = 1 + sizeof(uint16_t) + strlen(url);
+    pkcs7_pad(message, &msg_len);
+
+    // encrypt message
+    struct AES_ctx aes_ctx;
+    AES_init_ctx_iv(&aes_ctx, aes_key, aes_iv);
+    AES_CBC_encrypt_buffer(&aes_ctx, (uint8_t*)message, msg_len);
+
+    // prepend IV to message
+    char packet[msg_len + AES_BLOCKLEN];
+    memcpy(packet, aes_iv, AES_BLOCKLEN);
+    memcpy(packet + AES_BLOCKLEN, message, msg_len);
+
+    // send message to server
+    if ((send(sockfd, packet, msg_len + AES_BLOCKLEN, 0)) == -1){
+        perror("send");
+        return -1;
+    }
+    
+    return 0;
+}
+```
+
+In the main function of this program, the client first attempts to set up a TCP connection with the server and exits on failure.
+
+```c
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((rv = getaddrinfo(argv[1], TCP_PORT, &hints, &servinfo)) != 0){
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        return 1;
+    }
+
+    // loop through all the results and connect to the first we can
+    for (p = servinfo; p != NULL; p = p->ai_next){
+        // establishes socket
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+            perror("client: socket");
+            continue;
+        }
+
+        // Establishes connection between client and server
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1){
+            close(sockfd);
+            perror("client: connect");
+            continue;
+        }
+
+        break;
+    }
+
+    // checks for client connection error
+    if (p == NULL){
+        fprintf(stderr, "client: failed to connect\n");
+        return 2;
+    }
+
+    // Get the address of the server
+    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
+    printf("client: connecting to %s\n", s);
+    ```
+    
+    
 
 # Server.c
 
