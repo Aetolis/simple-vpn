@@ -105,7 +105,7 @@ void add_to_secs(struct cl_info *cl_secs[], uint8_t *cl_pub, uint8_t *shr_key, B
 void del_from_secs(struct cl_info cl_secs[], int i, int *sec_count)
 {
     // Copy the one from the end over this one
-    cl_secs[i] = cl_secs[*sec_count-1];
+    cl_secs[i-1] = cl_secs[*sec_count-1];
 
     (*sec_count)--;
 }
@@ -365,7 +365,7 @@ int main(void)
 
                         // Encrypt response using AES
                         struct AES_ctx aes_ctx;
-                        AES_init_ctx(&aes_ctx, cl_secs[sec_count-1].aes_key);
+                        AES_init_ctx(&aes_ctx, cl_secs[i-1].aes_key);
                         AES_CBC_encrypt_buffer(&aes_ctx, (uint8_t*)response, response_len);
 
                         // send to client
